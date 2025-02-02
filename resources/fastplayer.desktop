@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Fastplayer
+Comment=Media player based on Qt and mpv
+TryExec=fastplayer
+Exec=fastplayer
+Icon=fastplayer
+Type=Application
+Categories=Video;AudioVideo;

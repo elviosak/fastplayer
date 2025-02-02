@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+<!-- "#7d2"
+"#151" -->
+<path d="M5 50 
+q0 -40 45 -40 
+q45 0 45 40
+q0 40 -45 40
+q-45 0 -45 -40
+ "
+ stroke="#fa0"
+ stroke-width="8"
+ fill="#530"
+ />
+<path d="M35.86 35.86 L70 50 L 35.86 64.14z"
+stroke-linejoin="round" stroke-width="8"  stroke="#fa0"
+fill="#fa0" />
+</svg>
