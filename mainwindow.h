@@ -19,40 +19,35 @@
 
 #include <QDebug>
 
+#define SERVICE_NAME "local.fastplayer"
+
 class QTextEdit;
 class PlaylistStyle;
 
 class ListView : public QListView
 {
     using QListView::QListView;
-    // QModelIndex indexAt(const QPoint& p) const override;
-    // QRect visualRect(const QModelIndex& index) const override;
+    // TODO: improve listview
 };
 
-// inline QModelIndex ListView::indexAt(const QPoint& p) const
-// {
-//     QPoint p2(2, p.y());
-//     return QListView::indexAt(p2);
-// }
-
-// inline QRect ListView::visualRect(const QModelIndex& index) const
-// {
-//     QRect rect = QListView::visualRect(index);
-//     qDebug() << "visualRect" << rect;
-//     return rect;
-// }
+class QDBusServiceWatcher;
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", SERVICE_NAME)
 
 public:
-    MainWindow(QString arg = QString(), QWidget* parent = nullptr);
+    MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
+public Q_SLOTS:
+    Q_SCRIPTABLE void loadFiles(const QStringList& files);
+
 private slots:
-    void onFileOpen();
+    void registerDBus(const QString& service);
     void loadFiles(QList<QUrl> urls);
+    void onFileOpen();
     void onNewWindow();
     void onMpvEvents();
     void updateSpeed(int speedPerc);
@@ -76,6 +71,7 @@ private:
     QSettings* settings;
     QWidget* mpvWidget;
     mpv_handle* mpv;
+    QDBusServiceWatcher* watcher;
 
     QString draggedFile;
     bool muted;

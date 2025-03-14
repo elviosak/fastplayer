@@ -5,6 +5,9 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QColorDialog>
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusServiceWatcher>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFontComboBox>
@@ -43,7 +46,7 @@ static void wakeup(void* ctx)
     emit mainwindow->mpv_events();
 }
 
-MainWindow::MainWindow(QString arg, QWidget* parent)
+MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , settings(new QSettings("fastplayer", "fastplayer"))
     , muted(false)
@@ -290,10 +293,12 @@ MainWindow::MainWindow(QString arg, QWidget* parent)
 
     configureMpv();
 
-    if (arg != QString()) {
-        auto url = QFileInfo::exists(arg) ? QUrl::fromLocalFile(arg) : QUrl(arg);
-        loadFiles({ url });
-    }
+    registerDBus(SERVICE_NAME);
+
+    // if (arg != QString()) {
+    //     auto url = QFileInfo::exists(arg) ? QUrl::fromLocalFile(arg) : QUrl(arg);
+    //     loadFiles({ url });
+    // }
     mpvWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
     connect(mpvWidget, &QWidget::customContextMenuRequested, this, &MainWindow::showCustomMenu);
@@ -401,8 +406,33 @@ MainWindow::MainWindow(QString arg, QWidget* parent)
     saturationSpin->installEventFilter(this);
     gammaSpin->installEventFilter(this);
     hueSpin->installEventFilter(this);
+}
 
-    // playlistView->installEventFilter(this);
+// #include <QDBusReply>
+void MainWindow::registerDBus(const QString& service)
+{
+    if (service != SERVICE_NAME) {
+        qInfo() << "Service " << service << " unregistered, ignored";
+        return;
+    }
+    if (sender()) {
+        qInfo() << "Existing service was unregistered, trying again";
+        disconnect(watcher, &QDBusServiceWatcher::serviceUnregistered, this, &MainWindow::registerDBus);
+        watcher->deleteLater();
+    }
+
+    if (QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
+        // Register the object
+        qInfo() << "Service" << service << "registered succesfully.";
+        if (QDBusConnection::sessionBus().registerObject("/", this, QDBusConnection::ExportScriptableSlots)) {
+            qInfo() << "Object registered succesfully.";
+        }
+    }
+    else {
+        qInfo() << "Service" << service << "exists, will wait for it to unregister.";
+        watcher = new QDBusServiceWatcher(SERVICE_NAME, QDBusConnection::sessionBus());
+        connect(watcher, &QDBusServiceWatcher::serviceUnregistered, this, &MainWindow::registerDBus);
+    }
 }
 
 void MainWindow::configureMpv()
@@ -415,8 +445,6 @@ void MainWindow::configureMpv()
     // Create a video child window. Force Qt to create a native window, and
     // pass the window ID to the mpv wid option. Works on: X11, win32, Cocoa
 
-    // setCentralWidget(mpvWidget);
-    // mainLayout->insertWidget(0, mpvWidget);
     // mpvWidget->setAttribute(Qt::WA_DontCreateNativeAncestors);
     // mpvWidget->setAttribute(Qt::WA_NativeWindow);
     auto raw_wid = mpvWidget->winId();
@@ -428,16 +456,10 @@ void MainWindow::configureMpv()
     int64_t wid = raw_wid;
 #endif
     mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &wid);
-    // Enable default bindings, because we're lazy. Normally, a player using
-    // mpv as backend would implement its own key bindings.
     mpv_set_option_string(mpv, "input-default-bindings", "no");
     mpv_set_option_string(mpv, "idle", "yes");
     mpv_set_option_string(mpv, "keep-open", "yes");
     mpv_set_option_string(mpv, "input-cursor-passthrough", "yes");
-    // mpv_set_option_string(mpv, "sub-ass-override", "force");
-    // mpv_set_option_string(mpv, "sub-ass-override", "strip");
-
-    // mpv_set_option_string(mpv, "input-cursor", "no");
 
     // Let us receive property change events with MPV_EVENT_PROPERTY_CHANGE if
     // this property changes.
@@ -632,7 +654,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         }
     }
     else if (obj == playlistView) {
-        // qDebug() << "playlistView";
         if (event->type() == QEvent::MouseButtonPress) {
             // qDebug() << "playlist mouse";
         }
@@ -653,7 +674,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* e)
 {
-    // qDebug() << "enter";
     auto mime = e->mimeData();
 
     if (mime->hasUrls()) {
@@ -675,7 +695,6 @@ void MainWindow::dragMoveEvent(QDragMoveEvent* e)
 
 void MainWindow::dropEvent(QDropEvent* e)
 {
-    // qDebug() << "drop";
     auto mime = e->mimeData();
 
     if (mime->hasUrls()) {
@@ -768,7 +787,6 @@ void MainWindow::onPropertyChanged(mpv_event_property* prop)
         if (prop->format == MPV_FORMAT_FLAG) {
             paused = *(bool*)prop->data;
             playButton->setIcon(paused ? playIcon : pauseIcon);
-            // qDebug() << "core-idle" << paused;
         }
     }
     else if (strcmp(prop->name, "volume") == 0) {
@@ -778,7 +796,6 @@ void MainWindow::onPropertyChanged(mpv_event_property* prop)
         }
     }
     else if (strcmp(prop->name, "mute") == 0) {
-        // qDebug() << "muted";
         if (prop->format == MPV_FORMAT_FLAG) {
             muted = *(bool*)prop->data;
             updateVolume();
@@ -790,7 +807,6 @@ void MainWindow::onPropertyChanged(mpv_event_property* prop)
             if (eof) {
                 eofReached = true;
             }
-            // qDebug() << "eof-reached" << eof;
         }
     }
 
@@ -803,8 +819,6 @@ void MainWindow::onPropertyChanged(mpv_event_property* prop)
 
             setWindowTitle(QString::fromUtf8(title) + " - fastplayer");
         }
-        // QTextStream stream(stdout);
-        // stream << "media-title - " << prop->format << " - " << QString::fromUtf8(*(char**)prop->data) << Qt::endl;
     }
     else if (strcmp(prop->name, "filename") == 0) {
         QTextStream stream(stdout);
@@ -834,9 +848,7 @@ void MainWindow::updateProgress()
 void MainWindow::progressClicked(int posX)
 {
     int clickedTime = (((double)posX / progressBar->width()) * length);
-    // qDebug() << "clickedTime" << clickedTime;
     mpv::qt::set_property_variant(mpv, "time-pos", clickedTime);
-    // qDebug() << "props" << mpv::qt::get_property_variant(mpv, "property-list");
 }
 
 void MainWindow::showProgressTooltip(QPoint globalPos, int posX)
@@ -1049,123 +1061,123 @@ void MainWindow::showConfigDialog()
     auto showPlaylistButtonCheck = new QCheckBox;
     showPlaylistButtonCheck->setChecked(showPlaylistButton);
 
-    connect(showPlayPauseCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showPlayPauseCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showPlayPause = checked;
         playButton->setVisible(checked);
         settings->setValue("showPlayPause", checked);
     });
-    connect(showSpeedCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showSpeedCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showSpeed = checked;
         speedSpin->setVisible(checked);
         settings->setValue("showSpeed", checked);
     });
-    connect(showZoomCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showZoomCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showZoom = checked;
         zoomSpin->setVisible(checked);
         settings->setValue("showZoom", checked);
     });
-    connect(showRotationCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showRotationCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showRotation = checked;
         rotationSpin->setVisible(checked);
         settings->setValue("showRotation", checked);
     });
-    connect(showPanXCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showPanXCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showPanX = checked;
         panXSpin->setVisible(checked);
         settings->setValue("showPanX", checked);
     });
-    connect(showPanYCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showPanYCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showPanY = checked;
         panYSpin->setVisible(checked);
         settings->setValue("showPanY", checked);
     });
-    connect(showCropHCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showCropHCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showCropH = checked;
         cropHSpin->setVisible(checked);
         settings->setValue("showCropH", checked);
     });
-    connect(showCropVCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showCropVCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showCropV = checked;
         cropVSpin->setVisible(checked);
         settings->setValue("showCropV", checked);
     });
-    connect(showBrightnessCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showBrightnessCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showBrightness = checked;
         brightnessSpin->setVisible(checked);
         settings->setValue("showBrightness", checked);
     });
-    connect(showContrastCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showContrastCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showContrast = checked;
         contrastSpin->setVisible(checked);
         settings->setValue("showContrast", checked);
     });
-    connect(showSaturationCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showSaturationCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showSaturation = checked;
         saturationSpin->setVisible(checked);
         settings->setValue("showSaturation", checked);
     });
-    connect(showGammaCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showGammaCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showGamma = checked;
         gammaSpin->setVisible(checked);
         settings->setValue("showGamma", checked);
     });
-    connect(showHueCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showHueCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showHue = checked;
         hueSpin->setVisible(checked);
         settings->setValue("showHue", checked);
     });
 
-    connect(showProgressCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showProgressCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showProgress = checked;
         progressBar->setVisible(checked);
         settings->setValue("showProgress", checked);
     });
-    connect(showMuteCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showMuteCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showMute = checked;
         volumeButton->setVisible(checked);
         settings->setValue("showMute", checked);
     });
-    connect(showVolumeCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showVolumeCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showVolume = checked;
         volumeBar->setVisible(checked);
         settings->setValue("showVolume", checked);
     });
-    connect(showAudioCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showAudioCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showAudio = checked;
         audioButton->setVisible(checked);
         settings->setValue("showAudio", checked);
     });
-    connect(showSubCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showSubCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showSub = checked;
         subButton->setVisible(checked);
         settings->setValue("showSub", checked);
     });
-    connect(showSettingsCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showSettingsCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showSettings = checked;
         configDialogButton->setVisible(checked);
         settings->setValue("showSettings", checked);
     });
-    connect(showPlaylistButtonCheck, &QCheckBox::stateChanged, this, [&](int checkState) {
-        bool checked = checkState == Qt::Checked;
+    connect(showPlaylistButtonCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
+        bool checked = state == Qt::Checked;
         showPlaylistButton = checked;
         playlistButton->setVisible(checked);
         settings->setValue("showPlaylistButton", checked);
@@ -1244,10 +1256,6 @@ void MainWindow::showConfigDialog()
         auto color = QColorDialog::getColor(subColor, d, "Subtitle Color", QColorDialog::ShowAlphaChannel);
         if (color.isValid()) {
             subColor = color;
-            // auto btn = qobject_cast<QPushButton*>(sender());
-            // if (nullptr != btn) {
-            //     btn->setIcon(getSquareIcon(subColor));
-            // }
             subColorButton->setIcon(getSquareIcon(subColor));
             mpv::qt::set_option_variant(mpv, "sub-color", subColor.name(QColor::HexArgb));
             settings->setValue("subColor", subColor);
@@ -1310,7 +1318,6 @@ QIcon MainWindow::getSquareIcon(const QColor& color)
 QString MainWindow::getColorString(const QColor& color)
 {
     QString colorString = QString("%1/%2/%3/%4").arg(color.redF()).arg(color.greenF()).arg(color.blueF()).arg(color.alphaF());
-    // qDebug() << "colorString" << colorString;
     return colorString;
 }
 
@@ -1328,9 +1335,10 @@ void MainWindow::handle_mpv_event(mpv_event* event)
         mpv = NULL;
         break;
     }
-    default:;
+    default:
         // Ignore uninteresting or unknown events.
         // qDebug() << "Unhandled: " << event->event_id;
+        ;
     }
 }
 
@@ -1383,8 +1391,6 @@ void MainWindow::playPauseClicked()
 
 void MainWindow::showCustomMenu(const QPoint& pos)
 {
-    // qDebug() << "custom menu";
-
     QMenu* menu = new QMenu(this);
     QAction* a = menu->addAction(tr("&Open File"), this, &MainWindow::onFileOpen);
     a->setToolTip(tr("Open a file"));
@@ -1423,7 +1429,7 @@ void MainWindow::loadFiles(QList<QUrl> urls)
         QFileInfo info(file);
         QString ext = info.suffix().toLower();
         const QByteArray c_filename = file.toUtf8();
-        const QByteArray c_flag = QString("append-play").toUtf8();
+
         if (!info.exists()) {
             continue;
         }
@@ -1438,12 +1444,36 @@ void MainWindow::loadFiles(QList<QUrl> urls)
             loadFiles(subDir);
         }
         else if (supportedSubs.contains(ext)) {
-            // qDebug() << "subtitle";
             const char* args[] = { "sub-add", c_filename.data(), NULL };
             mpv_command(mpv, args);
         }
         else if (videoExt.contains(ext)) {
-            // qDebug() << "other";
+            const QByteArray c_flag = "append-play";
+            const char* args[] = { "loadfile", c_filename.data(), c_flag.data(), NULL };
+            mpv_command(mpv, args);
+        }
+    }
+    if (paused && eofReached) {
+        mpv::qt::set_property_variant(mpv, "pause", !paused);
+        eofReached = false;
+    }
+}
+Q_SCRIPTABLE void MainWindow::loadFiles(const QStringList& files)
+{
+    for (const QString& file : files) {
+        QFileInfo info(file);
+        if (!info.exists() || info.isDir()) {
+            continue;
+        }
+
+        const QByteArray c_filename = file.toUtf8();
+        QString ext = info.suffix().toLower();
+        if (supportedSubs.contains(ext)) {
+            const char* args[] = { "sub-add", c_filename.data(), NULL };
+            mpv_command(mpv, args);
+        }
+        else if (videoExt.contains(ext)) {
+            const QByteArray c_flag = "append-play";
             const char* args[] = { "loadfile", c_filename.data(), c_flag.data(), NULL };
             mpv_command(mpv, args);
         }
@@ -1461,6 +1491,9 @@ void MainWindow::onNewWindow()
 
 MainWindow::~MainWindow()
 {
+    bool unreg = QDBusConnection::sessionBus().unregisterService(SERVICE_NAME);
+    qInfo() << "unreg" << unreg;
+
     if (mpv) {
         mpv_terminate_destroy(mpv);
     }
