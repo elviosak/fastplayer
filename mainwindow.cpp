@@ -278,6 +278,7 @@ MainWindow::MainWindow(QWidget* parent)
     playlistView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     playlistView->setTextElideMode(Qt::ElideRight);
     playlistView->setSelectionMode(QListView::SingleSelection);
+    playlistView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     playlistStyle = new PlaylistStyle;
     playlistView->setItemDelegate(playlistStyle);
     playlistModel = new QStandardItemModel;
