@@ -33,18 +33,9 @@
 #include "mainwindow.h"
 #include "playliststyle.h"
 #include "qthelper.hpp"
+#include "mpvwidget.h"
 
 #define MAX_VOLUME 130
-
-static void wakeup(void* ctx)
-{
-    // This callback is invoked from any mpv thread (but possibly also
-    // recursively from a thread that is calling the mpv API). Just notify
-    // the Qt GUI thread to wake up (so that it can process events with
-    // mpv_wait_event()), and return as quickly as possible.
-    MainWindow* mainwindow = (MainWindow*)ctx;
-    emit mainwindow->mpv_events();
-}
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -208,7 +199,9 @@ MainWindow::MainWindow(QWidget* parent)
     playlistButton->setCheckable(true);
     playlistButton->setChecked(playlistVisible);
 
-    mpvWidget = new QWidget(this);
+    mpvWidget = new MpvWidget(this);
+    mpv = mpvWidget->mpv;
+
     controlBar = new QWidget;
     // controlBar->setMaximumHeight(fontMetrics().height() * 1.5);
     controlLayout = new QHBoxLayout(controlBar);
@@ -302,6 +295,7 @@ MainWindow::MainWindow(QWidget* parent)
     // }
     mpvWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
+    connect(mpvWidget, &MpvWidget::mpvEvent, this, &MainWindow::handle_mpv_event);
     connect(mpvWidget, &QWidget::customContextMenuRequested, this, &MainWindow::showCustomMenu);
     connect(playButton, &QPushButton::clicked, this, &MainWindow::playPauseClicked);
     connect(speedSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::updateSpeed);
@@ -438,56 +432,6 @@ void MainWindow::registerDBus(const QString& service)
 
 void MainWindow::configureMpv()
 {
-    mpv = mpv_create();
-    if (!mpv) {
-        throw std::runtime_error("can't create mpv instance");
-    }
-
-    // Create a video child window. Force Qt to create a native window, and
-    // pass the window ID to the mpv wid option. Works on: X11, win32, Cocoa
-
-    // mpvWidget->setAttribute(Qt::WA_DontCreateNativeAncestors);
-    // mpvWidget->setAttribute(Qt::WA_NativeWindow);
-    auto raw_wid = mpvWidget->winId();
-#ifdef _WIN32
-    // Truncate to 32-bit, as all Windows handles are. This also ensures
-    // it doesn't go negative.
-    int64_t wid = static_cast<uint32_t>(raw_wid);
-#else
-    int64_t wid = raw_wid;
-#endif
-    mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &wid);
-    mpv_set_option_string(mpv, "input-default-bindings", "no");
-    mpv_set_option_string(mpv, "idle", "yes");
-    mpv_set_option_string(mpv, "keep-open", "yes");
-    mpv_set_option_string(mpv, "input-cursor-passthrough", "yes");
-    mpv_set_option_string(mpv, "gpu-api", "opengl");
-
-    // Let us receive property change events with MPV_EVENT_PROPERTY_CHANGE if
-    // this property changes.
-    mpv_observe_property(mpv, 0, "duration", MPV_FORMAT_INT64);
-    mpv_observe_property(mpv, 0, "time-pos", MPV_FORMAT_INT64);
-    mpv_observe_property(mpv, 0, "volume", MPV_FORMAT_INT64);
-    mpv_observe_property(mpv, 0, "mute", MPV_FORMAT_FLAG);
-    mpv_observe_property(mpv, 0, "core-idle", MPV_FORMAT_FLAG);
-    mpv_observe_property(mpv, 0, "pause", MPV_FORMAT_FLAG);
-    mpv_observe_property(mpv, 0, "eof-reached", MPV_FORMAT_FLAG);
-
-    mpv_observe_property(mpv, 0, "track-list", MPV_FORMAT_NODE);
-    mpv_observe_property(mpv, 0, "chapter-list", MPV_FORMAT_NODE);
-    mpv_observe_property(mpv, 0, "media-title", MPV_FORMAT_STRING);
-    mpv_observe_property(mpv, 0, "playlist", MPV_FORMAT_NODE);
-
-    // From this point on, the wakeup function will be called. The callback
-    // can come from any thread, so we use the QueuedConnection mechanism to
-    // relay the wakeup in a thread-safe way.
-    connect(this, &MainWindow::mpv_events, this, &MainWindow::onMpvEvents,
-        Qt::QueuedConnection);
-    mpv_set_wakeup_callback(mpv, wakeup, this);
-
-    if (mpv_initialize(mpv) < 0) {
-        throw std::runtime_error("mpv failed to initialize");
-    }
     mpv::qt::set_property_variant(mpv, "volume", currentVolume);
     mpv::qt::set_option_variant(mpv, "sub-font", subFont.family());
     mpv::qt::set_option_variant(mpv, "sub-font-size", subFontSize);
@@ -1354,19 +1298,6 @@ void MainWindow::handle_mpv_event(mpv_event* event)
     }
 }
 
-// This slot is invoked by wakeup() (through the mpv_events signal).
-void MainWindow::onMpvEvents()
-{
-    // Process all events, until the event queue is empty.
-    while (mpv) {
-        mpv_event* event = mpv_wait_event(mpv, 0);
-        if (event->event_id == MPV_EVENT_NONE) {
-            break;
-        }
-        handle_mpv_event(event);
-    }
-}
-
 void MainWindow::updateSpeed(int speedPerc)
 {
     playbackSpeed = speedPerc;
@@ -1520,14 +1451,5 @@ void MainWindow::onNewWindow()
 MainWindow::~MainWindow()
 {
     bool unreg = QDBusConnection::sessionBus().unregisterService(SERVICE_NAME);
-    qInfo() << "unreg" << unreg;
-    int count = playlistModel->rowCount();
-    for (int i = 0; i < count; ++i) {
-        QVariantList args;
-            args << QString("playlist-remove") << 0;
-            mpv::qt::command(mpv, args);
-    }
-    if (mpv) {
-        mpv_terminate_destroy(mpv);
-    }
+    mpvWidget->deleteLater();
 }

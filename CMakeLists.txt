@@ -19,6 +19,8 @@ set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
         mainwindow.h
+        mpvwidget.cpp
+        mpvwidget.h
         qthelper.hpp
         playliststyle.h
         playliststyle.cpp

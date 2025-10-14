@@ -2,7 +2,7 @@
 Name=Fastplayer New Instance
 Comment=Fastplayer New Instance
 TryExec=fastplayer
-Exec=env -u WAYLAND_DISPLAY fastplayer --new %U
+Exec=fastplayer --new %U
 Icon=fastplayer
 Terminal=false
 Type=Application

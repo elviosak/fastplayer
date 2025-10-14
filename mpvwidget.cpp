@@ -26,14 +26,32 @@ MpvWidget::MpvWidget(QWidget *parent, Qt::WindowFlags f)
     mpv_set_option_string(mpv, "terminal", "yes");
     mpv_set_option_string(mpv, "msg-level", "all=v");
     mpv_set_option_string(mpv, "vo", "libmpv");
+    mpv_set_option_string(mpv, "input-default-bindings", "no");
+    mpv_set_option_string(mpv, "idle", "yes");
+    mpv_set_option_string(mpv, "keep-open", "yes");
+    mpv_set_option_string(mpv, "input-cursor-passthrough", "yes");
+    mpv_set_option_string(mpv, "gpu-api", "opengl");
+    mpv_set_option_string(mpv, "audio-client-name", "fastplayer");
+
     if (mpv_initialize(mpv) < 0)
         throw std::runtime_error("could not initialize mpv context");
 
     // Request hw decoding, just for testing.
     mpv::qt::set_option_variant(mpv, "hwdec", "auto");
 
-    mpv_observe_property(mpv, 0, "duration", MPV_FORMAT_DOUBLE);
-    mpv_observe_property(mpv, 0, "time-pos", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(mpv, 0, "duration", MPV_FORMAT_INT64);
+    mpv_observe_property(mpv, 0, "time-pos", MPV_FORMAT_INT64);
+    mpv_observe_property(mpv, 0, "volume", MPV_FORMAT_INT64);
+    mpv_observe_property(mpv, 0, "mute", MPV_FORMAT_FLAG);
+    mpv_observe_property(mpv, 0, "core-idle", MPV_FORMAT_FLAG);
+    mpv_observe_property(mpv, 0, "pause", MPV_FORMAT_FLAG);
+    mpv_observe_property(mpv, 0, "eof-reached", MPV_FORMAT_FLAG);
+
+    mpv_observe_property(mpv, 0, "track-list", MPV_FORMAT_NODE);
+    mpv_observe_property(mpv, 0, "chapter-list", MPV_FORMAT_NODE);
+    mpv_observe_property(mpv, 0, "media-title", MPV_FORMAT_STRING);
+    mpv_observe_property(mpv, 0, "playlist", MPV_FORMAT_NODE);
+
     mpv_set_wakeup_callback(mpv, wakeup, this);
 }
 
@@ -98,7 +116,8 @@ void MpvWidget::on_mpv_events()
         if (event->event_id == MPV_EVENT_NONE) {
             break;
         }
-        handle_mpv_event(event);
+        emit mpvEvent(event);
+        //handle_mpv_event(event);
     }
 }
 

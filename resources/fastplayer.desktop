@@ -2,7 +2,7 @@
 Name=Fastplayer
 Comment=Media player based on Qt and mpv
 TryExec=fastplayer
-Exec=env -u WAYLAND_DISPLAY fastplayer %U
+Exec=fastplayer %U
 Icon=fastplayer
 Terminal=false
 Type=Application

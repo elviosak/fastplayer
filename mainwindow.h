@@ -31,6 +31,7 @@ class ListView : public QListView
 };
 
 class QDBusServiceWatcher;
+class MpvWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -49,7 +50,6 @@ private slots:
     void loadFiles(QList<QUrl> urls);
     void onFileOpen();
     void onNewWindow();
-    void onMpvEvents();
     void updateSpeed(int speedPerc);
     void seek(bool forward);
     void seekBar(bool forward);
@@ -70,7 +70,7 @@ protected:
 
 private:
     QSettings* settings;
-    QWidget* mpvWidget;
+    MpvWidget* mpvWidget;
     mpv_handle* mpv;
     QDBusServiceWatcher* watcher;
 
