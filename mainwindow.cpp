@@ -461,6 +461,7 @@ void MainWindow::configureMpv()
     mpv_set_option_string(mpv, "idle", "yes");
     mpv_set_option_string(mpv, "keep-open", "yes");
     mpv_set_option_string(mpv, "input-cursor-passthrough", "yes");
+    mpv_set_option_string(mpv, "gpu-api", "opengl");
 
     // Let us receive property change events with MPV_EVENT_PROPERTY_CHANGE if
     // this property changes.
@@ -500,6 +501,7 @@ void MainWindow::configureMpv()
 void MainWindow::loadConfig()
 {
     seekStep = settings->value("seekStep", 10).toInt();
+    seekBarStep = settings->value("seekBarStep", 30).toInt();
     volumeStep = settings->value("volumeStep", 5).toInt();
     currentVolume = settings->value("volume", 70).toInt();
     currentVolume = qBound(0, currentVolume, MAX_VOLUME);
@@ -568,7 +570,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
         if (event->type() == QEvent::Wheel) {
             auto wheelEvent = static_cast<QWheelEvent*>(event);
             int y = wheelEvent->angleDelta().y();
-            seek(y > 0);
+            seekBar(y > 0);
             return true;
         }
         return false;
@@ -1001,6 +1003,14 @@ void MainWindow::showConfigDialog()
         seekStep = value;
         settings->setValue("seekStep", value);
     });
+    auto seekBarStepSpin = new QSpinBox;
+    seekBarStepSpin->setRange(1, 200);
+    seekBarStepSpin->setValue(seekBarStep);
+    seekBarStepSpin->setSuffix("s");
+    connect(seekBarStepSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [&](int value) {
+        seekBarStep = value;
+        settings->setValue("seekBarStep", value);
+    });
     auto volumeStepSpin = new QSpinBox;
     volumeStepSpin->setRange(1, 20);
     volumeStepSpin->setValue(volumeStep);
@@ -1011,6 +1021,7 @@ void MainWindow::showConfigDialog()
     });
 
     genForm->addRow("Seek Step", seekStepSpin);
+    genForm->addRow("Seek Progress Bar Step", seekBarStepSpin);
     genForm->addRow("Volume Step", volumeStepSpin);
 
     // UI
@@ -1367,9 +1378,25 @@ void MainWindow::updateSpeed(int speedPerc)
 void MainWindow::seek(bool forward)
 {
     if (length > 0) {
-        int delta = forward ? seekStep : -seekStep;
-        int newTime = qBound(0, time + delta, length);
-        mpv::qt::set_property_variant(mpv, "playback-time", newTime);
+        const int delta = forward ? seekStep : -seekStep;
+        // int newTime = qBound(0, time + delta, length + 1);
+        // mpv::qt::set_property_variant(mpv, "playback-time", newTime);
+        QVariantList args;
+        // args << QString("seek") << newTime << QString("absolute");
+        args << QString("add") << QString("playback-time") << delta;
+        mpv::qt::command(mpv, args);
+    }
+}
+
+void MainWindow::seekBar(bool forward)
+{
+    if (length > 0) {
+        const int delta = forward ? seekBarStep : -seekBarStep;
+        // int newTime = qBound(0, time + delta, length + 1);
+        // mpv::qt::set_property_variant(mpv, "playback-time", newTime);
+        QVariantList args;
+        args << QString("add") << QString("playback-time") << delta;
+        mpv::qt::command(mpv, args);
     }
 }
 
@@ -1494,7 +1521,12 @@ MainWindow::~MainWindow()
 {
     bool unreg = QDBusConnection::sessionBus().unregisterService(SERVICE_NAME);
     qInfo() << "unreg" << unreg;
-
+    int count = playlistModel->rowCount();
+    for (int i = 0; i < count; ++i) {
+        QVariantList args;
+            args << QString("playlist-remove") << 0;
+            mpv::qt::command(mpv, args);
+    }
     if (mpv) {
         mpv_terminate_destroy(mpv);
     }

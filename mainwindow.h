@@ -52,6 +52,7 @@ private slots:
     void onMpvEvents();
     void updateSpeed(int speedPerc);
     void seek(bool forward);
+    void seekBar(bool forward);
     void playPauseClicked();
     void toggleFullscreen();
     void showCustomMenu(const QPoint& pos);
@@ -86,6 +87,7 @@ private:
 
     // settings
     int seekStep;
+    int seekBarStep;
     int volumeStep;
     int currentVolume;
     QColor subColor;

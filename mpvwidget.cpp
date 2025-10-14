@@ -39,7 +39,8 @@ MpvWidget::MpvWidget(QWidget *parent, Qt::WindowFlags f)
 
 MpvWidget::~MpvWidget()
 {
-    makeCurrent();
+    qInfo() << "~MpvWidget()";
+    // makeCurrent();
     if (mpv_gl)
         mpv_render_context_free(mpv_gl);
     mpv_terminate_destroy(mpv);
