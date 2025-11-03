@@ -270,6 +270,7 @@ MainWindow::MainWindow(QWidget* parent)
     // Playlist
     playlistDock = new QDockWidget("Playlist", this);
     playlistDock->setObjectName("Playlist");
+    playlistDock->setTitleBarWidget(new QWidget(playlistDock));
     playlistView = new ListView;
     playlistView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     playlistView->setTextElideMode(Qt::ElideRight);
@@ -865,7 +866,7 @@ void MainWindow::updatePlaylist(QVariantList list)
         }
     }
     selectedIndex = -1;
-    
+
     int iconHeight = fontMetrics().height() * 1;
     QIcon upIcon = QIcon::fromTheme("go-up");
     QIcon downIcon = QIcon::fromTheme("go-down");
