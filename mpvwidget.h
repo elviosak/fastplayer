@@ -15,7 +15,7 @@ public:
     void command(const QVariant& params);
     void setProperty(const QString& name, const QVariant& value);
     QVariant getProperty(const QString& name) const;
-    QSize sizeHint() const { return QSize(480, 270); }
+    QSize sizeHint() const override { return QSize(480, 270); }
 Q_SIGNALS:
     void durationChanged(int value);
     void positionChanged(int value);
@@ -31,7 +31,7 @@ private Q_SLOTS:
 private:
     void handle_mpv_event(mpv_event* event);
     static void on_update(void* ctx);
-    
+
 public:
     mpv_handle* mpv;
     mpv_render_context* mpv_gl;

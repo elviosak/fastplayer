@@ -30,12 +30,15 @@
 
 #include <QTextStream>
 
+#include "listmodel.h"
+#include "listview.h"
 #include "mainwindow.h"
+#include "mpvwidget.h"
 #include "playliststyle.h"
 #include "qthelper.hpp"
-#include "mpvwidget.h"
 
 #define MAX_VOLUME 130
+#define LOG qInfo()
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -274,7 +277,7 @@ MainWindow::MainWindow(QWidget* parent)
     playlistView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     playlistStyle = new PlaylistStyle;
     playlistView->setItemDelegate(playlistStyle);
-    playlistModel = new QStandardItemModel;
+    playlistModel = new ListModel;
     playlistView->setModel(playlistModel);
 
     playlistDock->setWidget(playlistView);
@@ -385,6 +388,7 @@ MainWindow::MainWindow(QWidget* parent)
             mpv::qt::set_property_variant(mpv, "pause", false);
         }
     });
+    connect(playlistModel, &ListModel::playlistMove, this, &MainWindow::playlistMove);
 
     progressBar->installEventFilter(this);
     volumeBar->installEventFilter(this);
@@ -407,24 +411,24 @@ MainWindow::MainWindow(QWidget* parent)
 void MainWindow::registerDBus(const QString& service)
 {
     if (service != SERVICE_NAME) {
-        qInfo() << "Service " << service << " unregistered, ignored";
+        LOG << "Service " << service << " unregistered, ignored";
         return;
     }
     if (sender()) {
-        qInfo() << "Existing service was unregistered, trying again";
+        LOG << "Existing service was unregistered, trying again";
         disconnect(watcher, &QDBusServiceWatcher::serviceUnregistered, this, &MainWindow::registerDBus);
         watcher->deleteLater();
     }
 
     if (QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
         // Register the object
-        qInfo() << "Service" << service << "registered succesfully.";
+        LOG << "Service" << service << "registered succesfully.";
         if (QDBusConnection::sessionBus().registerObject("/", this, QDBusConnection::ExportScriptableSlots)) {
-            qInfo() << "Object registered succesfully.";
+            LOG << "Object registered succesfully.";
         }
     }
     else {
-        qInfo() << "Service" << service << "exists, will wait for it to unregister.";
+        LOG << "Service" << service << "exists, will wait for it to unregister.";
         watcher = new QDBusServiceWatcher(SERVICE_NAME, QDBusConnection::sessionBus());
         connect(watcher, &QDBusServiceWatcher::serviceUnregistered, this, &MainWindow::registerDBus);
     }
@@ -763,7 +767,6 @@ void MainWindow::onPropertyChanged(mpv_event_property* prop)
         }
         else if (prop->format == MPV_FORMAT_STRING) {
             char* title = *(char**)prop->data;
-
             setWindowTitle(QString::fromUtf8(title) + " - fastplayer");
         }
     }
@@ -849,11 +852,20 @@ void MainWindow::stepVolume(bool increase)
 
 void MainWindow::updatePlaylist(QVariantList list)
 {
-    auto modelIndex = playlistView->currentIndex();
-    int row = modelIndex.isValid() ? modelIndex.row() : -1;
-    if (row >= list.count()) {
-        row = list.count() - 1;
+    int newSelection;
+    QModelIndex modelIndex;
+    if (selectedIndex >= 0 && selectedIndex < list.count()) {
+        newSelection = selectedIndex;
     }
+    else {
+        modelIndex = playlistView->currentIndex();
+        newSelection = modelIndex.isValid() ? modelIndex.row() : -1;
+        if (newSelection >= list.count()) {
+            newSelection = list.count() - 1;
+        }
+    }
+    selectedIndex = -1;
+    
     int iconHeight = fontMetrics().height() * 1;
     QIcon upIcon = QIcon::fromTheme("go-up");
     QIcon downIcon = QIcon::fromTheme("go-down");
@@ -868,6 +880,7 @@ void MainWindow::updatePlaylist(QVariantList list)
         QString title = info.exists() ? info.completeBaseName() : filename;
         bool current = media.value("current").toBool();
         auto item = new QStandardItem(QString());
+        item->setDropEnabled(false);
         playlistModel->appendRow(item);
         auto index = playlistModel->indexFromItem(item);
         auto widget = new QWidget;
@@ -896,9 +909,7 @@ void MainWindow::updatePlaylist(QVariantList list)
         }
         else {
             connect(upButton, &QPushButton::clicked, this, [=] {
-                QVariantList args;
-                args << QString("playlist-move") << i << i - 1;
-                mpv::qt::command(mpv, args);
+                playlistMove(i, i - 1);
             });
         }
         if (i == list.count() - 1) {
@@ -906,19 +917,15 @@ void MainWindow::updatePlaylist(QVariantList list)
         }
         else {
             connect(downButton, &QPushButton::clicked, this, [=] {
-                QVariantList args;
-                args << QString("playlist-move") << i << i + 2;
-                mpv::qt::command(mpv, args);
+                playlistMove(i, i + 2);
             });
         }
         connect(delButton, &QPushButton::clicked, this, [=] {
-            QVariantList args;
-            args << QString("playlist-remove") << i;
-            mpv::qt::command(mpv, args);
+            playlistRemove(i);
         });
     }
-    if (row != -1) {
-        modelIndex = playlistModel->index(row, 0);
+    if (newSelection != -1) {
+        modelIndex = playlistModel->index(newSelection, 0);
         playlistView->setCurrentIndex(modelIndex);
     }
 }
@@ -1370,6 +1377,67 @@ void MainWindow::toggleFullscreen()
     else {
         showFullScreen();
     }
+}
+
+void MainWindow::playlistMove(int from, int to)
+{
+    if (from == to) {
+        return;
+    }
+    // if (selectNew) {
+    //     selectedIndex = to > from ? to - 1 : to;
+    // }
+    // else {
+    auto index = playlistView->currentIndex();
+    if (index.isValid()) {
+        int row = index.row();
+        int dest = from < to ? to - 1 : to;
+        if ((row < from && row < dest) || (row > from && row > dest)) {
+            selectedIndex = row;
+        }
+        else if ((row == from && from > dest) || (row == from && from < dest)) {
+            selectedIndex = dest;
+        }
+        else if (row == dest && dest < from) {
+            selectedIndex = row + 1;
+        }
+        else if (row == dest && dest > from) {
+            selectedIndex = row - 1;
+        }
+        else {
+            selectedIndex = -1;
+        }
+    }
+    // }
+
+    QVariantList args;
+    args << QString("playlist-move") << from << to;
+    mpv::qt::command(mpv, args);
+}
+
+void MainWindow::playlistRemove(int i)
+{
+    auto index = playlistView->currentIndex();
+    if (index.isValid()) {
+        int row = index.row();
+        if (row == i) {
+            if (row < playlistModel->rowCount() - 1) {
+                selectedIndex = row;
+            }
+            else {
+                selectedIndex = row - 1;
+            }
+        }
+        else if (row < i) {
+            selectedIndex = row;
+        }
+        else if (row > i) {
+            selectedIndex = row - 1;
+        }
+    }
+    QVariantList args;
+    args << QString("playlist-remove") << i;
+    mpv::qt::command(mpv, args);
 }
 
 void MainWindow::onFileOpen()

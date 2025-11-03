@@ -5,6 +5,7 @@ project(fastplayer VERSION 0.1 LANGUAGES CXX)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,6 +22,10 @@ set(PROJECT_SOURCES
         mainwindow.h
         mpvwidget.cpp
         mpvwidget.h
+        listview.cpp
+        listview.h
+        listmodel.cpp
+        listmodel.h
         qthelper.hpp
         playliststyle.h
         playliststyle.cpp

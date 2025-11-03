@@ -24,12 +24,9 @@
 class QTextEdit;
 class PlaylistStyle;
 
-class ListView : public QListView
-{
-    using QListView::QListView;
-    // TODO: improve listview
-};
 
+class ListView;
+class ListModel;
 class QDBusServiceWatcher;
 class MpvWidget;
 
@@ -55,6 +52,8 @@ private slots:
     void seekBar(bool forward);
     void playPauseClicked();
     void toggleFullscreen();
+    void playlistMove(int from, int to);
+    void playlistRemove(int index);
     void showCustomMenu(const QPoint& pos);
     void showConfigDialog();
 
@@ -74,6 +73,7 @@ private:
     mpv_handle* mpv;
     QDBusServiceWatcher* watcher;
 
+    int selectedIndex = -1;
     QString draggedFile;
     bool muted;
     bool paused;
@@ -156,7 +156,7 @@ private:
     QPushButton* playlistButton;
     QDockWidget* playlistDock;
     ListView* playlistView;
-    QStandardItemModel* playlistModel;
+    ListModel* playlistModel;
     PlaylistStyle* playlistStyle;
 
     // Dialog
@@ -182,5 +182,5 @@ private:
     void handle_mpv_event(mpv_event* event);
 
 protected:
-    void closeEvent(QCloseEvent* event);
+    void closeEvent(QCloseEvent* event) override;
 };
