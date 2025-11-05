@@ -1281,6 +1281,7 @@ void MainWindow::handle_mpv_event(mpv_event* event)
     default:
         // Ignore uninteresting or unknown events.
         // qDebug() << "Unhandled: " << event->event_id;
+        ;
     }
 }
 
