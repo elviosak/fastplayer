@@ -11,6 +11,8 @@
 int main(int argc, char* argv[])
 {
     QApplication a(argc, argv);
+    QCoreApplication::setApplicationName("fastplayer");
+    QCoreApplication::setOrganizationName("fastplayer");
     bool isNew = false;
     QStringList files;
     QVariantList var;

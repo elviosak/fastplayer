@@ -68,7 +68,7 @@ protected:
     void dropEvent(QDropEvent*) override;
 
 private:
-    QSettings* settings;
+    QSettings settings;
     MpvWidget* mpvWidget;
     mpv_handle* mpv;
     QDBusServiceWatcher* watcher;

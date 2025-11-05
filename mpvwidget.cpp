@@ -36,8 +36,9 @@ MpvWidget::MpvWidget(QWidget *parent, Qt::WindowFlags f)
     if (mpv_initialize(mpv) < 0)
         throw std::runtime_error("could not initialize mpv context");
 
-    // Request hw decoding, just for testing.
-    mpv::qt::set_option_variant(mpv, "hwdec", "auto");
+    // removing due to issues with glitchy videos, not the same issue but
+    // probably related to https://github.com/mpv-player/mpv/issues/15019
+    // mpv::qt::set_option_variant(mpv, "hwdec", "auto");
 
     mpv_observe_property(mpv, 0, "duration", MPV_FORMAT_INT64);
     mpv_observe_property(mpv, 0, "time-pos", MPV_FORMAT_INT64);

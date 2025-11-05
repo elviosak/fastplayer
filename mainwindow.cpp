@@ -1,6 +1,5 @@
 #include <clocale>
 #include <cmath>
-#include <stdexcept>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -42,7 +41,6 @@
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
-    , settings(new QSettings("fastplayer", "fastplayer"))
     , muted(false)
     , paused(false)
     , time(0)
@@ -374,12 +372,10 @@ MainWindow::MainWindow(QWidget* parent)
     connect(playlistButton, &QPushButton::toggled, this, [=](bool checked) {
         playlistDock->setVisible(checked);
         playlistVisible = checked;
-        settings->setValue("playlistVisible", checked);
+        settings.setValue("playlistVisible", checked);
     });
     connect(playlistView, &QListView::clicked, this, [=](const QModelIndex& index) {
-        // qDebug() << "clicked" << index.row();
         if (index.isValid()) {
-            // playlistView->setCurrentIndex(index);
             playlistView->selectionModel()->select(index, QItemSelectionModel::Select);
         }
     });
@@ -449,50 +445,50 @@ void MainWindow::configureMpv()
 
 void MainWindow::loadConfig()
 {
-    seekStep = settings->value("seekStep", 10).toInt();
-    seekBarStep = settings->value("seekBarStep", 30).toInt();
-    volumeStep = settings->value("volumeStep", 5).toInt();
-    currentVolume = settings->value("volume", 70).toInt();
+    seekStep = settings.value("seekStep", 10).toInt();
+    seekBarStep = settings.value("seekBarStep", 30).toInt();
+    volumeStep = settings.value("volumeStep", 5).toInt();
+    currentVolume = settings.value("volume", 70).toInt();
     currentVolume = qBound(0, currentVolume, MAX_VOLUME);
-    subFont = settings->value("subFont", QFont("sans-serif")).value<QFont>();
-    subFontSize = settings->value("subFontSize", 55).toInt();
-    subBorderColor = settings->value("subBorderColor", QColor(Qt::black)).value<QColor>();
-    subBorderSize = settings->value("subBorderSize", 3).toInt();
-    subColor = settings->value("subColor", QColor(Qt::yellow)).value<QColor>();
-    playbackSpeed = settings->value("playbackSpeed", 100).toInt();
+    subFont = settings.value("subFont", QFont("sans-serif")).value<QFont>();
+    subFontSize = settings.value("subFontSize", 55).toInt();
+    subBorderColor = settings.value("subBorderColor", QColor(Qt::black)).value<QColor>();
+    subBorderSize = settings.value("subBorderSize", 3).toInt();
+    subColor = settings.value("subColor", QColor(Qt::yellow)).value<QColor>();
+    playbackSpeed = settings.value("playbackSpeed", 100).toInt();
 
-    showPlayPause = settings->value("showPlayPause", true).toBool();
-    showSpeed = settings->value("showSpeed", true).toBool();
-    showZoom = settings->value("showZoom", true).toBool();
-    showRotation = settings->value("showRotation", true).toBool();
-    showPanX = settings->value("showPanX", false).toBool();
-    showPanY = settings->value("showPanY", false).toBool();
-    showCropH = settings->value("showCropH", true).toBool();
-    showCropV = settings->value("showCropV", true).toBool();
+    showPlayPause = settings.value("showPlayPause", true).toBool();
+    showSpeed = settings.value("showSpeed", true).toBool();
+    showZoom = settings.value("showZoom", true).toBool();
+    showRotation = settings.value("showRotation", true).toBool();
+    showPanX = settings.value("showPanX", false).toBool();
+    showPanY = settings.value("showPanY", false).toBool();
+    showCropH = settings.value("showCropH", true).toBool();
+    showCropV = settings.value("showCropV", true).toBool();
 
-    showBrightness = settings->value("showBrightness", true).toBool();
-    showContrast = settings->value("showContrast", true).toBool();
-    showSaturation = settings->value("showSaturation", false).toBool();
-    showGamma = settings->value("showGamma", false).toBool();
-    showHue = settings->value("showHue", false).toBool();
+    showBrightness = settings.value("showBrightness", true).toBool();
+    showContrast = settings.value("showContrast", true).toBool();
+    showSaturation = settings.value("showSaturation", false).toBool();
+    showGamma = settings.value("showGamma", false).toBool();
+    showHue = settings.value("showHue", false).toBool();
 
-    showProgress = settings->value("showProgress", true).toBool();
-    showMute = settings->value("showMute", true).toBool();
-    showVolume = settings->value("showVolume", true).toBool();
-    showAudio = settings->value("showAudio", true).toBool();
-    showSub = settings->value("showSub", true).toBool();
-    showSettings = settings->value("showSettings", true).toBool();
-    showPlaylistButton = settings->value("showPlaylistButton", true).toBool();
-    playlistVisible = settings->value("playlistVisible", true).toBool();
+    showProgress = settings.value("showProgress", true).toBool();
+    showMute = settings.value("showMute", true).toBool();
+    showVolume = settings.value("showVolume", true).toBool();
+    showAudio = settings.value("showAudio", true).toBool();
+    showSub = settings.value("showSub", true).toBool();
+    showSettings = settings.value("showSettings", true).toBool();
+    showPlaylistButton = settings.value("showPlaylistButton", true).toBool();
+    playlistVisible = settings.value("playlistVisible", true).toBool();
 
-    restoreState(settings->value("windowState").toByteArray());
-    restoreGeometry(settings->value("geometry").toByteArray());
+    restoreState(settings.value("windowState").toByteArray());
+    restoreGeometry(settings.value("geometry").toByteArray());
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    settings->setValue("geometry", saveGeometry());
-    settings->setValue("windowState", saveState());
+    settings.setValue("geometry", saveGeometry());
+    settings.setValue("windowState", saveState());
     QMainWindow::closeEvent(event);
 }
 
@@ -576,11 +572,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     }
     else if (obj == this || obj == mpvWidget) {
         if (event->type() == QEvent::KeyPress) {
-            // qDebug() << "keypress";
             auto keyEvent = static_cast<QKeyEvent*>(event);
             if (keyEvent->modifiers().testFlag(Qt::NoModifier)) {
                 if (keyEvent->key() == Qt::Key_Space) {
-                    // qDebug() << "space";
                     playPauseClicked();
                 }
                 else if (keyEvent->key() == Qt::Key_L || keyEvent->key() == Qt::Key_Right) {
@@ -604,21 +598,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 return true;
             }
         }
-    }
-    else if (obj == playlistView) {
-        if (event->type() == QEvent::MouseButtonPress) {
-            // qDebug() << "playlist mouse";
-        }
-    }
-    else if (nullptr != qobject_cast<QAbstractSpinBox*>(obj) && (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease)) {
-        auto keyEvent = static_cast<QKeyEvent*>(event);
-        auto k = keyEvent->key();
-        if ((k >= Qt::Key_0 && k <= Qt::Key_9) || (k >= Qt::Key_Left && k <= Qt::Key_Down)) {
-            // make spinbox handle only those keys
-            return QMainWindow::eventFilter(obj, event);
-        }
-        // let MainWindow handle the event maybe it is a shortcut
-        return eventFilter(this, event);
     }
     // pass the event on to the parent class
     return QMainWindow::eventFilter(obj, event);
@@ -810,7 +789,7 @@ void MainWindow::showProgressTooltip(QPoint globalPos, int posX)
 
 void MainWindow::updateVolume()
 {
-    settings->setValue("volume", currentVolume);
+    settings.setValue("volume", currentVolume);
     if (currentVolume == 0 || muted) {
         volumeButton->setIcon(volumeMutedIcon);
     }
@@ -953,7 +932,7 @@ void MainWindow::showConfigDialog()
     seekStepSpin->setSuffix("s");
     connect(seekStepSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [&](int value) {
         seekStep = value;
-        settings->setValue("seekStep", value);
+        settings.setValue("seekStep", value);
     });
     auto seekBarStepSpin = new QSpinBox;
     seekBarStepSpin->setRange(1, 200);
@@ -961,7 +940,7 @@ void MainWindow::showConfigDialog()
     seekBarStepSpin->setSuffix("s");
     connect(seekBarStepSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [&](int value) {
         seekBarStep = value;
-        settings->setValue("seekBarStep", value);
+        settings.setValue("seekBarStep", value);
     });
     auto volumeStepSpin = new QSpinBox;
     volumeStepSpin->setRange(1, 20);
@@ -969,7 +948,7 @@ void MainWindow::showConfigDialog()
     volumeStepSpin->setSuffix("%");
     connect(volumeStepSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [&](int value) {
         volumeStep = value;
-        settings->setValue("volumeStep", value);
+        settings.setValue("volumeStep", value);
     });
 
     genForm->addRow("Seek Step", seekStepSpin);
@@ -1029,122 +1008,122 @@ void MainWindow::showConfigDialog()
         bool checked = state == Qt::Checked;
         showPlayPause = checked;
         playButton->setVisible(checked);
-        settings->setValue("showPlayPause", checked);
+        settings.setValue("showPlayPause", checked);
     });
     connect(showSpeedCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showSpeed = checked;
         speedSpin->setVisible(checked);
-        settings->setValue("showSpeed", checked);
+        settings.setValue("showSpeed", checked);
     });
     connect(showZoomCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showZoom = checked;
         zoomSpin->setVisible(checked);
-        settings->setValue("showZoom", checked);
+        settings.setValue("showZoom", checked);
     });
     connect(showRotationCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showRotation = checked;
         rotationSpin->setVisible(checked);
-        settings->setValue("showRotation", checked);
+        settings.setValue("showRotation", checked);
     });
     connect(showPanXCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showPanX = checked;
         panXSpin->setVisible(checked);
-        settings->setValue("showPanX", checked);
+        settings.setValue("showPanX", checked);
     });
     connect(showPanYCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showPanY = checked;
         panYSpin->setVisible(checked);
-        settings->setValue("showPanY", checked);
+        settings.setValue("showPanY", checked);
     });
     connect(showCropHCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showCropH = checked;
         cropHSpin->setVisible(checked);
-        settings->setValue("showCropH", checked);
+        settings.setValue("showCropH", checked);
     });
     connect(showCropVCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showCropV = checked;
         cropVSpin->setVisible(checked);
-        settings->setValue("showCropV", checked);
+        settings.setValue("showCropV", checked);
     });
     connect(showBrightnessCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showBrightness = checked;
         brightnessSpin->setVisible(checked);
-        settings->setValue("showBrightness", checked);
+        settings.setValue("showBrightness", checked);
     });
     connect(showContrastCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showContrast = checked;
         contrastSpin->setVisible(checked);
-        settings->setValue("showContrast", checked);
+        settings.setValue("showContrast", checked);
     });
     connect(showSaturationCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showSaturation = checked;
         saturationSpin->setVisible(checked);
-        settings->setValue("showSaturation", checked);
+        settings.setValue("showSaturation", checked);
     });
     connect(showGammaCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showGamma = checked;
         gammaSpin->setVisible(checked);
-        settings->setValue("showGamma", checked);
+        settings.setValue("showGamma", checked);
     });
     connect(showHueCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showHue = checked;
         hueSpin->setVisible(checked);
-        settings->setValue("showHue", checked);
+        settings.setValue("showHue", checked);
     });
 
     connect(showProgressCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showProgress = checked;
         progressBar->setVisible(checked);
-        settings->setValue("showProgress", checked);
+        settings.setValue("showProgress", checked);
     });
     connect(showMuteCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showMute = checked;
         volumeButton->setVisible(checked);
-        settings->setValue("showMute", checked);
+        settings.setValue("showMute", checked);
     });
     connect(showVolumeCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showVolume = checked;
         volumeBar->setVisible(checked);
-        settings->setValue("showVolume", checked);
+        settings.setValue("showVolume", checked);
     });
     connect(showAudioCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showAudio = checked;
         audioButton->setVisible(checked);
-        settings->setValue("showAudio", checked);
+        settings.setValue("showAudio", checked);
     });
     connect(showSubCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showSub = checked;
         subButton->setVisible(checked);
-        settings->setValue("showSub", checked);
+        settings.setValue("showSub", checked);
     });
     connect(showSettingsCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showSettings = checked;
         configDialogButton->setVisible(checked);
-        settings->setValue("showSettings", checked);
+        settings.setValue("showSettings", checked);
     });
     connect(showPlaylistButtonCheck, &QCheckBox::checkStateChanged, this, [&](Qt::CheckState state) {
         bool checked = state == Qt::Checked;
         showPlaylistButton = checked;
         playlistButton->setVisible(checked);
-        settings->setValue("showPlaylistButton", checked);
+        settings.setValue("showPlaylistButton", checked);
     });
 
     uiForm->addRow("Show Play Button", showPlayPauseCheck);
@@ -1178,7 +1157,7 @@ void MainWindow::showConfigDialog()
     connect(fontCombo, &QFontComboBox::currentFontChanged, d, [&](const QFont& f) {
         subFont = f;
         mpv::qt::set_option_variant(mpv, "sub-font", f.family());
-        settings->setValue("subFont", f);
+        settings.setValue("subFont", f);
     });
 
     auto fontSizeSpin = new QSpinBox;
@@ -1188,7 +1167,7 @@ void MainWindow::showConfigDialog()
     connect(fontSizeSpin, QOverload<int>::of(&QSpinBox::valueChanged), d, [&](int value) {
         subFontSize = value;
         mpv::qt::set_option_variant(mpv, "sub-font-size", value);
-        settings->setValue("subFontSize", value);
+        settings.setValue("subFontSize", value);
     });
 
     auto borderButton = new QPushButton("Pick");
@@ -1202,7 +1181,7 @@ void MainWindow::showConfigDialog()
                 btn->setIcon(getSquareIcon(subBorderColor));
             }
             mpv::qt::set_option_variant(mpv, "sub-border-color", subBorderColor.name(QColor::HexArgb));
-            settings->setValue("subBorderColor", color);
+            settings.setValue("subBorderColor", color);
         }
     });
     auto borderSizeSpin = new QSpinBox;
@@ -1211,7 +1190,7 @@ void MainWindow::showConfigDialog()
     connect(borderSizeSpin, QOverload<int>::of(&QSpinBox::valueChanged), d, [&](int value) {
         subBorderSize = value;
         mpv::qt::set_option_variant(mpv, "sub-border-size", value);
-        settings->setValue("subBorderSize", value);
+        settings.setValue("subBorderSize", value);
     });
 
     subColorButton = new QPushButton("Pick");
@@ -1222,7 +1201,7 @@ void MainWindow::showConfigDialog()
             subColor = color;
             subColorButton->setIcon(getSquareIcon(subColor));
             mpv::qt::set_option_variant(mpv, "sub-color", subColor.name(QColor::HexArgb));
-            settings->setValue("subColor", subColor);
+            settings.setValue("subColor", subColor);
         }
     });
 
@@ -1302,7 +1281,6 @@ void MainWindow::handle_mpv_event(mpv_event* event)
     default:
         // Ignore uninteresting or unknown events.
         // qDebug() << "Unhandled: " << event->event_id;
-        ;
     }
 }
 
@@ -1311,7 +1289,7 @@ void MainWindow::updateSpeed(int speedPerc)
     playbackSpeed = speedPerc;
     double speed = (double)speedPerc / 100;
     mpv::qt::set_property_variant(mpv, "speed", speed);
-    settings->setValue("playbackSpeed", speedPerc);
+    settings.setValue("playbackSpeed", speedPerc);
 }
 
 void MainWindow::seek(bool forward)
